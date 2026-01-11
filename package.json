@@ -18,10 +18,7 @@
 	],
 	"scripts": {
 		"build": "tsup",
-		"verify": "./bin/verify.mjs",
-		"verify:logic": "vitest run",
-		"verify:format": "biome check --write .",
-		"verify:types": "tsgo --noEmit"
+		"verify": "./bin/verify.mjs"
 	},
 	"keywords": [
 		"verify",

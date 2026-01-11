@@ -190,9 +190,9 @@ export class LiveDashboardReporter implements Reporter {
       const summary = this.extractSummary(task.result)
 
       if (task.result.ok) {
-        return `${indent}${this.okMark()} verified ${this.c(ansi.bold, displayKey)} ${this.c(ansi.dim, `(${summary}, ${duration})`)}`
+        return ` ${indent}${this.okMark()} verified ${this.c(ansi.bold, displayKey)} ${this.c(ansi.dim, `(${summary}, ${duration})`)}`
       }
-      return `${indent}${this.failMark()} failed ${this.c(ansi.bold, displayKey)} ${this.c(ansi.dim, `(${summary}, ${duration})`)}`
+      return `${indent}${this.failMark()}    failed ${this.c(ansi.bold, displayKey)} ${this.c(ansi.dim, `(${summary}, ${duration})`)}`
     }
 
     // Pending - don't show
@@ -203,18 +203,16 @@ export class LiveDashboardReporter implements Reporter {
    * Extract summary from task result
    */
   private extractSummary(result: TaskResult): string {
-    if (result.metrics) {
-      const { passed, total, errors, warnings } = result.metrics
-      if (passed !== undefined && total !== undefined) {
-        return `${passed}/${total} passed`
+    // Use the parsed summary from summaryLine (strip the "key: " prefix if present)
+    // The parsers already format summaries nicely with file counts, test counts, etc.
+    if (result.summaryLine) {
+      const colonIndex = result.summaryLine.indexOf(": ")
+      if (colonIndex !== -1) {
+        return result.summaryLine.slice(colonIndex + 2)
       }
-      if (errors !== undefined) {
-        return errors === 0 ? "passed" : `${errors} errors`
-      }
-      if (warnings !== undefined && warnings > 0) {
-        return `${warnings} warnings`
-      }
+      return result.summaryLine
     }
+
     return result.ok ? "passed" : "failed"
   }
 
@@ -361,18 +359,16 @@ export class SequentialReporter implements Reporter {
   }
 
   private extractSummary(result: TaskResult): string {
-    if (result.metrics) {
-      const { passed, total, errors, warnings } = result.metrics
-      if (passed !== undefined && total !== undefined) {
-        return `${passed}/${total} passed`
+    // Use the parsed summary from summaryLine (strip the "key: " prefix if present)
+    // The parsers already format summaries nicely with file counts, test counts, etc.
+    if (result.summaryLine) {
+      const colonIndex = result.summaryLine.indexOf(": ")
+      if (colonIndex !== -1) {
+        return result.summaryLine.slice(colonIndex + 2)
       }
-      if (errors !== undefined) {
-        return errors === 0 ? "passed" : `${errors} errors`
-      }
-      if (warnings !== undefined && warnings > 0) {
-        return `${warnings} warnings`
-      }
+      return result.summaryLine
     }
+
     return result.ok ? "passed" : "failed"
   }
 

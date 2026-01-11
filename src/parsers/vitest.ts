@@ -1,31 +1,44 @@
 import type { OutputParser, ParsedResult } from "../types.js"
 
 /**
+ * Strip ANSI escape codes from string
+ */
+function stripAnsi(str: string): string {
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: ANSI escape codes use control characters
+  return str.replace(/\x1b\[[0-9;]*m/g, "")
+}
+
+/**
  * Parser for vitest output
- * Extracts test counts and duration from vitest summary
+ * Extracts test counts from vitest summary
  */
 export const vitestParser: OutputParser = {
   id: "vitest",
   parse(output: string, exitCode: number): ParsedResult | null {
-    // Match: "Tests  257 passed (257)" with flexible whitespace
-    const testsMatch = output.match(/^\s*Tests\s+(\d+)\s+passed\s+\((\d+)\)/m)
+    // Strip ANSI codes for reliable parsing
+    const cleanOutput = stripAnsi(output)
 
-    // Match: "Duration  1.72s" and ignore extra timing breakdown
-    const durationMatch = output.match(/^\s*Duration\s+([\d.]+s)\b/m)
+    // Match: "Tests  26 passed (26)" with flexible whitespace
+    // Vitest v4 format: "      Tests  26 passed (26)"
+    const testsMatch = cleanOutput.match(/Tests\s+(\d+)\s+passed\s*\((\d+)\)/m)
 
-    if (!testsMatch || !durationMatch) {
+    // Match: "Duration  192ms" or "Duration  1.72s"
+    const durationMatch = cleanOutput.match(/Duration\s+([\d.]+(?:ms|s))\b/m)
+
+    if (!testsMatch) {
       return null
     }
 
     const passed = Number.parseInt(testsMatch[1], 10)
     const total = Number.parseInt(testsMatch[2], 10)
-    const duration = durationMatch[1]
+    const duration = durationMatch ? durationMatch[1] : undefined
 
+    // Don't include duration in summary - the reporter adds wall-clock time
     return {
       summary:
         exitCode === 0
-          ? `${passed}/${total} tests passed in ${duration}`
-          : `${passed}/${total} tests passed (some failed)`,
+          ? `passed ${passed}/${total} tests`
+          : `passed ${passed}/${total} tests (some failed)`,
       metrics: {
         passed,
         total,
