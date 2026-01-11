@@ -18,6 +18,7 @@ function parseArgs(args) {
     force: false,
     yes: false,
     all: false,
+    noTty: false,
   }
 
   for (let i = 0; i < args.length; i++) {
@@ -39,6 +40,8 @@ function parseArgs(args) {
       options.yes = true
     } else if (arg === "--all" || arg === "-a") {
       options.all = true
+    } else if (arg === "--no-tty") {
+      options.noTty = true
     } else if (arg.startsWith("--logs=")) {
       options.logs = arg.slice(7)
     } else if (arg === "--logs") {
@@ -75,6 +78,7 @@ Options:
   --verbose, -v       Show all task output
   --quiet, -q         Show only final result
   --all, -a           Show all nested tasks (default: top-level only)
+  --no-tty            Force sequential output (disable live dashboard)
   --logs=MODE         Log verbosity: all, failed, none (default: failed)
   --config, -c PATH   Path to config file (or output path for --init)
   --filter, -f PATH   Filter to specific task paths
@@ -153,6 +157,7 @@ async function main() {
     filter: options.filter.length > 0 ? options.filter : undefined,
     cwd: options.config,
     showAll: options.all,
+    noTty: options.noTty,
   }
 
   try {

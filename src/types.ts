@@ -82,6 +82,8 @@ export interface VerifyOptions {
   noColor?: boolean
   /** Show all nested tasks (default: only top-level) */
   showAll?: boolean
+  /** Force sequential output (disable live dashboard) */
+  noTty?: boolean
 }
 
 /**

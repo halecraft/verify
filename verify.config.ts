@@ -2,13 +2,25 @@ import { defineConfig } from "@halecraft/verify"
 
 export default defineConfig({
   tasks: [
-    { key: "format", run: "pnpm biome check --write .", parser: "biome" },
-    { key: "logic", run: "pnpm vitest run", parser: "vitest" },
+    // Use direct paths to avoid pnpm exec overhead (~250ms per command)
+    {
+      key: "format",
+      run: "./node_modules/.bin/biome check --write .",
+      parser: "biome",
+    },
+    { key: "logic", run: "./node_modules/.bin/vitest run", parser: "vitest" },
     {
       key: "types",
-      run: "pnpm exec tsgo --noEmit --diagnostics",
-      parser: "tsc",
+      children: [
+        { key: "tsc", run: "./node_modules/.bin/tsc --noEmit", parser: "tsc" },
+        {
+          key: "tsgo",
+          run: "./node_modules/.bin/tsgo --noEmit --diagnostics",
+          parser: "tsc",
+        },
+      ],
     },
+    // build still uses pnpm because it runs the package.json script
     { key: "build", run: "pnpm build" },
   ],
 })

@@ -83,7 +83,17 @@ export async function loadConfigFromCwd(
 }
 
 /**
- * Merge options with defaults
+ * Helper type that requires all keys to be present but preserves original value types.
+ * This is used to ensure mergeOptions handles all VerifyOptions properties.
+ */
+type AllKeys<T> = { [K in keyof Required<T>]: T[K] }
+
+/**
+ * Merge options with defaults.
+ *
+ * NOTE: The `satisfies AllKeys<VerifyOptions>` ensures this function handles
+ * all properties of VerifyOptions. If you add a new option to VerifyOptions,
+ * TypeScript will error here until you add it to the return object.
  */
 export function mergeOptions(
   configOptions?: VerifyOptions,
@@ -95,5 +105,7 @@ export function mergeOptions(
     filter: cliOptions?.filter ?? configOptions?.filter,
     cwd: cliOptions?.cwd ?? configOptions?.cwd ?? process.cwd(),
     noColor: cliOptions?.noColor ?? configOptions?.noColor ?? false,
-  }
+    showAll: cliOptions?.showAll ?? configOptions?.showAll ?? false,
+    noTty: cliOptions?.noTty ?? configOptions?.noTty ?? false,
+  } satisfies AllKeys<VerifyOptions>
 }

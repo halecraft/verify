@@ -526,8 +526,8 @@ export function createReporter(options: VerifyOptions): Reporter {
     return new JSONReporter()
   }
 
-  // Use LiveDashboardReporter for TTY, SequentialReporter otherwise
-  if (process.stdout.isTTY) {
+  // Use LiveDashboardReporter for TTY (unless --no-tty is set)
+  if (process.stdout.isTTY && !options.noTty) {
     return new LiveDashboardReporter(options)
   }
 
