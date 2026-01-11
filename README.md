@@ -47,6 +47,8 @@ export default defineConfig({
 });
 ```
 
+Note that you can shave off ~150ms for each command if you skip your package manager (e.g. `./node_modules/.bin/eslint` instead of `pnpm lint`).
+
 ### Run Verification
 
 ```bash
@@ -85,7 +87,11 @@ interface VerificationNode {
   name?: string;
 
   // Command to run (leaf nodes only)
-  run?: string | { cmd: string; args: string[]; cwd?: string };
+  // Supports: string, object with cmd/args/cwd, or [cmd, args] tuple
+  run?:
+    | string
+    | { cmd: string; args: string[]; cwd?: string }
+    | [string, string[]];
 
   // Child tasks (for grouping)
   children?: VerificationNode[];
@@ -98,6 +104,12 @@ interface VerificationNode {
 
   // Tasks that must pass for this task's failure to be reported
   reportingDependsOn?: string[];
+
+  // Custom success message template (optional)
+  successLabel?: string;
+
+  // Custom failure message template (optional)
+  failureLabel?: string;
 }
 ```
 
@@ -121,7 +133,8 @@ export default defineConfig({
 **How it works:**
 
 - All tasks still execute in parallel (no speed regression)
-- When a dependency fails (e.g., `format`), dependent tasks that also fail are marked as "suppressed"
+- When a dependency fails (e.g., `format`), dependent tasks are terminated early for faster feedback
+- Dependent tasks that also fail are marked as "suppressed"
 - Only the root cause failure shows detailed logs
 - Suppressed tasks show `⊘ suppressed` instead of `✗ failed`
 
@@ -219,6 +232,8 @@ Options:
   --json              Output results as JSON
   --verbose, -v       Show all task output
   --quiet, -q         Show only final result
+  --top-level, -t     Show only top-level tasks (hide descendants)
+  --no-tty            Force sequential output (disable live dashboard)
   --logs=MODE         Log verbosity: all, failed, none (default: failed)
   --config, -c PATH   Path to config file (or output path for --init)
   --filter, -f PATH   Filter to specific task paths
@@ -235,14 +250,51 @@ import { verify, defineConfig } from "@halecraft/verify";
 
 const config = defineConfig({
   tasks: [{ key: "test", run: "vitest run" }],
+  // Optional: set default options for this config
+  options: {
+    logs: "failed",
+  },
 });
 
 const result = await verify(config, {
-  logs: "failed",
-  format: "human",
+  // All options (CLI options can override config defaults)
+  logs: "failed", // "all" | "failed" | "none"
+  format: "human", // "human" | "json"
+  filter: ["test"], // Filter to specific task paths
+  cwd: process.cwd(), // Working directory
+  noColor: false, // Disable colors
+  topLevelOnly: false, // Show only top-level tasks
+  noTty: false, // Force sequential output
 });
 
 console.log(result.ok ? "All passed!" : "Some failed");
+```
+
+### VerifyResult
+
+The `verify()` function returns a `VerifyResult` object:
+
+```typescript
+interface VerifyResult {
+  ok: boolean; // Whether all tasks passed
+  startedAt: string; // ISO timestamp when run started
+  finishedAt: string; // ISO timestamp when run finished
+  durationMs: number; // Total duration in milliseconds
+  tasks: TaskResult[]; // Individual task results
+}
+
+interface TaskResult {
+  key: string; // Task key
+  path: string; // Full path (e.g., "logic:unit")
+  ok: boolean; // Whether the task passed
+  code: number; // Exit code
+  durationMs: number; // Duration in milliseconds
+  output: string; // Raw output
+  summaryLine: string; // Parsed summary
+  suppressed?: boolean; // True if output was suppressed
+  suppressedBy?: string; // Path of dependency that caused suppression
+  children?: TaskResult[]; // Child results (for group nodes)
+}
 ```
 
 ## Output Parsers
