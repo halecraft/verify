@@ -375,6 +375,7 @@ export class LiveDashboardReporter extends BaseReporter {
 
 /**
  * Sequential Reporter - line-by-line output for non-TTY
+ * No indentation since parallel execution means output order doesn't reflect hierarchy
  */
 export class SequentialReporter extends BaseReporter {
   private topLevelOnly: boolean
@@ -399,23 +400,17 @@ export class SequentialReporter extends BaseReporter {
 
   onTaskStart(path: string, _key: string): void {
     if (!this.shouldDisplay(path)) return
-    const depth = this.getTaskDepth(path)
-    const indent = this.getIndent(depth)
-    this.stream.write(
-      `${indent}${this.arrow()} verifying ${this.c(ansi.bold, path)}\n`,
-    )
+    this.stream.write(`${this.arrow()} verifying ${this.c(ansi.bold, path)}\n`)
   }
 
   onTaskComplete(result: TaskResult): void {
     if (!this.shouldDisplay(result.path)) return
-    const depth = this.getTaskDepth(result.path)
-    const indent = this.getIndent(depth)
     const mark = result.ok ? this.okMark() : this.failMark()
     const verb = result.ok ? "verified" : "failed"
     const summary = this.extractSummary(result)
     const duration = this.c(ansi.dim, `${result.durationMs}ms`)
     this.stream.write(
-      `${indent}${mark} ${verb} ${this.c(ansi.bold, result.path)} ${this.c(ansi.dim, `(${summary}, ${duration})`)}\n`,
+      `${mark} ${verb} ${this.c(ansi.bold, result.path)} ${this.c(ansi.dim, `(${summary}, ${duration})`)}\n`,
     )
   }
 
