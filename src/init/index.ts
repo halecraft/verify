@@ -84,10 +84,25 @@ export async function runInit(options: InitOptions): Promise<InitResult> {
   // Generate config content
   const content = generateConfigContent(promptResult.tasks, format)
 
+  // Determine if optimized commands were used
+  const hasOptimizedCommands = promptResult.tasks.some(t =>
+    t.command.startsWith("./node_modules/.bin/"),
+  )
+
+  // Determine which scripts could be removed (those that were detected and optimized)
+  const removableScripts = promptResult.tasks
+    .filter(t => t.command.startsWith("./node_modules/.bin/"))
+    .map(t => t.scriptName)
+
   // Write the file
   try {
     writeConfigFile(options.cwd, configPath, content)
-    printSuccess(configPath)
+    printSuccess({
+      configPath,
+      tasks: promptResult.tasks,
+      hasOptimizedCommands,
+      removableScripts,
+    })
     return {
       success: true,
       configPath,
