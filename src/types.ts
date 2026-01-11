@@ -64,6 +64,12 @@ export interface VerificationNode {
   successLabel?: string
   /** Failure message template */
   failureLabel?: string
+  /**
+   * Tasks that must pass for this task's failure to be reported.
+   * If any dependency fails, this task's failure output is suppressed.
+   * Can specify task keys (e.g., "format") or full paths (e.g., "types:tsc").
+   */
+  reportingDependsOn?: string[]
 }
 
 /**
@@ -132,6 +138,16 @@ export interface TaskResult {
   metrics?: ParsedResult["metrics"]
   /** Child results (for group nodes) */
   children?: TaskResult[]
+  /**
+   * Whether this task's failure output was suppressed due to a dependency failure.
+   * The task still ran and failed, but its output is hidden to reduce noise.
+   */
+  suppressed?: boolean
+  /**
+   * The path of the dependency task that caused this task to be suppressed.
+   * Only set when suppressed is true.
+   */
+  suppressedBy?: string
 }
 
 /**

@@ -95,8 +95,72 @@ interface VerificationNode {
 
   // Parser ID for output parsing (auto-detected if not specified)
   parser?: string;
+
+  // Tasks that must pass for this task's failure to be reported
+  reportingDependsOn?: string[];
 }
 ```
+
+### Smart Output Suppression with `reportingDependsOn`
+
+When a syntax error occurs, multiple tools often report the same underlying issue (Biome, tsc, esbuild all complaining about the same missing comma). The `reportingDependsOn` option reduces this noise by suppressing redundant failure output.
+
+```typescript
+import { defineConfig } from "@halecraft/verify";
+
+export default defineConfig({
+  tasks: [
+    { key: "format", run: "biome check ." },
+    { key: "types", run: "tsc --noEmit", reportingDependsOn: ["format"] },
+    { key: "logic", run: "vitest run", reportingDependsOn: ["format"] },
+    { key: "build", run: "tsup", reportingDependsOn: ["format"] },
+  ],
+});
+```
+
+**How it works:**
+
+- All tasks still execute in parallel (no speed regression)
+- When a dependency fails (e.g., `format`), dependent tasks that also fail are marked as "suppressed"
+- Only the root cause failure shows detailed logs
+- Suppressed tasks show `⊘ suppressed` instead of `✗ failed`
+
+**Before (noisy):**
+
+```
+✗ format (syntax error at line 14)
+✗ types (syntax error at line 14)
+✗ logic (syntax error at line 14)
+✗ build (syntax error at line 14)
+
+==== FORMAT FAIL ====
+[50 lines of biome output]
+
+==== TYPES FAIL ====
+[20 lines of tsc output]
+
+==== LOGIC FAIL ====
+[30 lines of vitest output]
+
+==== BUILD FAIL ====
+[30 lines of tsup output]
+```
+
+**After (clean):**
+
+```
+✗ format (syntax error at line 14)
+⊘ types (suppressed - format failed)
+⊘ logic (suppressed - format failed)
+⊘ build (suppressed - format failed)
+
+==== FORMAT FAIL ====
+[50 lines of biome output]
+
+== verification: Failed ==
+```
+
+**Note:** When using `verify --init`, the generated config automatically adds `reportingDependsOn: ["format"]` to types, logic, and build tasks when a format task is detected.
 
 ### Nested Tasks
 

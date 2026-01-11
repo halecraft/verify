@@ -17,6 +17,11 @@ export interface DetectedTask {
   category: "format" | "types" | "logic" | "build" | "other"
   /** Parser to use for this task */
   parser?: string
+  /**
+   * Tasks that must pass for this task's failure to be reported.
+   * Auto-populated based on category (types/logic/build depend on format).
+   */
+  reportingDependsOn?: string[]
 }
 
 /**
@@ -304,6 +309,17 @@ export function detectFromPackageJson(cwd: string): DetectedTask[] {
   }
 
   detected.sort((a, b) => categoryOrder[a.category] - categoryOrder[b.category])
+
+  // Add reportingDependsOn for non-format tasks if a format task exists
+  // This reduces noise when a syntax error causes multiple tools to fail
+  const hasFormatTask = detected.some(t => t.category === "format")
+  if (hasFormatTask) {
+    for (const task of detected) {
+      if (task.category !== "format" && task.category !== "other") {
+        task.reportingDependsOn = ["format"]
+      }
+    }
+  }
 
   return detected
 }

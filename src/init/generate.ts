@@ -31,6 +31,10 @@ function generateTask(task: DetectedTask, indent: string): string {
   if (task.parser) {
     parts.push(`parser: "${task.parser}"`)
   }
+  if (task.reportingDependsOn && task.reportingDependsOn.length > 0) {
+    const deps = task.reportingDependsOn.map(d => `"${d}"`).join(", ")
+    parts.push(`reportingDependsOn: [${deps}]`)
+  }
   return `${indent}{ ${parts.join(", ")} }`
 }
 

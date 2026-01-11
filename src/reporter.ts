@@ -95,6 +95,13 @@ export abstract class BaseReporter implements Reporter {
   }
 
   /**
+   * Get suppressed mark (⊘ or SUPPRESSED)
+   */
+  protected suppressedMark(): string {
+    return this.colorEnabled ? this.c(ansi.yellow, "⊘") : "SUPPRESSED"
+  }
+
+  /**
    * Get arrow symbol (→ or ->)
    */
   protected arrow(): string {
@@ -175,6 +182,8 @@ export abstract class BaseReporter implements Reporter {
     for (const r of flatResults) {
       if (r.children) continue
       if (logsMode === "failed" && r.ok) continue
+      // Skip suppressed tasks - their output is hidden to reduce noise
+      if (r.suppressed) continue
 
       const status = r.ok ? this.c(ansi.green, "OK") : this.c(ansi.red, "FAIL")
 
@@ -305,6 +314,15 @@ export class LiveDashboardReporter extends BaseReporter {
 
     if (task.status === "completed" && task.result) {
       const duration = this.c(ansi.dim, `${task.result.durationMs}ms`)
+
+      // Handle suppressed tasks
+      if (task.result.suppressed) {
+        const reason = task.result.suppressedBy
+          ? `${task.result.suppressedBy} failed`
+          : "dependency failed"
+        return `${indent}${this.suppressedMark()} suppressed ${this.c(ansi.bold, displayKey)} ${this.c(ansi.dim, `(${reason}, ${duration})`)}`
+      }
+
       const summary = this.extractSummary(task.result)
 
       if (task.result.ok) {
@@ -405,10 +423,22 @@ export class SequentialReporter extends BaseReporter {
 
   onTaskComplete(result: TaskResult): void {
     if (!this.shouldDisplay(result.path)) return
+    const duration = this.c(ansi.dim, `${result.durationMs}ms`)
+
+    // Handle suppressed tasks
+    if (result.suppressed) {
+      const reason = result.suppressedBy
+        ? `${result.suppressedBy} failed`
+        : "dependency failed"
+      this.stream.write(
+        `${this.suppressedMark()} suppressed ${this.c(ansi.bold, result.path)} ${this.c(ansi.dim, `(${reason}, ${duration})`)}\n`,
+      )
+      return
+    }
+
     const mark = result.ok ? this.okMark() : this.failMark()
     const verb = result.ok ? "verified" : "failed"
     const summary = this.extractSummary(result)
-    const duration = this.c(ansi.dim, `${result.durationMs}ms`)
     this.stream.write(
       `${mark} ${verb} ${this.c(ansi.bold, result.path)} ${this.c(ansi.dim, `(${summary}, ${duration})`)}\n`,
     )
@@ -465,6 +495,8 @@ export class JSONReporter implements Reporter {
     code: number
     durationMs: number
     summaryLine: string
+    suppressed?: boolean
+    suppressedBy?: string
     children?: ReturnType<JSONReporter["serializeTasks"]>
   }> {
     return tasks.map(t => ({
@@ -474,6 +506,8 @@ export class JSONReporter implements Reporter {
       code: t.code,
       durationMs: t.durationMs,
       summaryLine: t.summaryLine,
+      ...(t.suppressed ? { suppressed: t.suppressed } : {}),
+      ...(t.suppressedBy ? { suppressedBy: t.suppressedBy } : {}),
       ...(t.children ? { children: this.serializeTasks(t.children) } : {}),
     }))
   }
