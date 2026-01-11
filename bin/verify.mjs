@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { verifyFromConfig } from "../dist/index.js"
+import { runInit, verifyFromConfig } from "../dist/index.js"
 
 /**
  * Parse CLI arguments
@@ -14,6 +14,9 @@ function parseArgs(args) {
     filter: [],
     config: undefined,
     help: false,
+    init: false,
+    force: false,
+    yes: false,
   }
 
   for (let i = 0; i < args.length; i++) {
@@ -27,6 +30,12 @@ function parseArgs(args) {
       options.quiet = true
     } else if (arg === "--help" || arg === "-h") {
       options.help = true
+    } else if (arg === "--init") {
+      options.init = true
+    } else if (arg === "--force") {
+      options.force = true
+    } else if (arg === "--yes" || arg === "-y") {
+      options.yes = true
     } else if (arg.startsWith("--logs=")) {
       options.logs = arg.slice(7)
     } else if (arg === "--logs") {
@@ -63,8 +72,11 @@ Options:
   --verbose, -v       Show all task output
   --quiet, -q         Show only final result
   --logs=MODE         Log verbosity: all, failed, none (default: failed)
-  --config, -c PATH   Path to config file
+  --config, -c PATH   Path to config file (or output path for --init)
   --filter, -f PATH   Filter to specific task paths
+  --init              Initialize a new verify.config.ts file
+  --force             Overwrite existing config file (with --init)
+  --yes, -y           Skip interactive prompts, auto-accept detected tasks
   --help, -h          Show this help message
 
 Examples:
@@ -73,6 +85,9 @@ Examples:
   verify logic:ts           Run only 'logic:ts' task
   verify --json             Output JSON for CI
   verify --logs=all         Show all output
+  verify --init             Create config interactively
+  verify --init -y          Create config with all detected tasks
+  verify --init --force     Overwrite existing config
 
 Config:
   Create a verify.config.ts file in your project root:
@@ -102,6 +117,26 @@ async function main() {
   if (options.help) {
     printHelp()
     process.exit(0)
+  }
+
+  // Handle --init command
+  if (options.init) {
+    try {
+      const result = await runInit({
+        config: options.config,
+        force: options.force,
+        yes: options.yes,
+        cwd: process.cwd(),
+      })
+      process.exit(result.success ? 0 : 1)
+    } catch (error) {
+      if (error instanceof Error) {
+        console.error(`Error: ${error.message}`)
+      } else {
+        console.error("Unknown error occurred")
+      }
+      process.exit(1)
+    }
   }
 
   // Build verify options

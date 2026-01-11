@@ -18,8 +18,9 @@
   ],
   "scripts": {
     "build": "tsup",
-    "dev": "tsup --watch",
-    "typecheck": "tsc --noEmit"
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "verify": "./bin/verify.mjs"
   },
   "keywords": [
     "verify",
@@ -30,11 +31,15 @@
   ],
   "author": "",
   "license": "MIT",
+  "dependencies": {
+    "@inquirer/prompts": "^7.0.0"
+  },
   "devDependencies": {
     "@biomejs/biome": "^2.3.11",
     "@types/node": "^25.0.6",
     "tsup": "^8.5.0",
-    "typescript": "~5.8.3"
+    "typescript": "~5.8.3",
+    "vitest": "^4.0.16"
   },
   "peerDependencies": {
     "typescript": ">=5.0.0"

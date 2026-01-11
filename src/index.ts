@@ -15,6 +15,16 @@ export {
   discoverPackages,
   hasPackageChanged,
 } from "./discovery.js"
+// Init
+export {
+  type DetectedTask,
+  detectTasks,
+  generateConfigContent,
+  type InitOptions,
+  type InitResult,
+  type OutputFormat,
+  runInit,
+} from "./init/index.js"
 // Parsers
 export {
   biomeParser,
