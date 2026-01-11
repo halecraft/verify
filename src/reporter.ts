@@ -61,6 +61,148 @@ function shouldUseColors(options: VerifyOptions): boolean {
 }
 
 /**
+ * Base Reporter - common functionality for all reporters
+ */
+export abstract class BaseReporter implements Reporter {
+  protected colorEnabled: boolean
+  protected stream: NodeJS.WriteStream
+  protected taskDepths: Map<string, number> = new Map()
+
+  constructor(options: VerifyOptions = {}) {
+    this.colorEnabled = shouldUseColors(options)
+    this.stream = options.format === "json" ? process.stderr : process.stdout
+  }
+
+  /**
+   * Apply ANSI color code to string (if colors enabled)
+   */
+  protected c(code: string, s: string): string {
+    return this.colorEnabled ? `${code}${s}${ansi.reset}` : s
+  }
+
+  /**
+   * Get success mark (✓ or OK)
+   */
+  protected okMark(): string {
+    return this.colorEnabled ? this.c(ansi.green, "✓") : "OK"
+  }
+
+  /**
+   * Get failure mark (✗ or FAIL)
+   */
+  protected failMark(): string {
+    return this.colorEnabled ? this.c(ansi.red, "✗") : "FAIL"
+  }
+
+  /**
+   * Get arrow symbol (→ or ->)
+   */
+  protected arrow(): string {
+    return this.colorEnabled ? this.c(ansi.cyan, "→") : "->"
+  }
+
+  /**
+   * Get indentation string for a given depth
+   */
+  protected getIndent(depth: number): string {
+    return "  ".repeat(depth)
+  }
+
+  /**
+   * Get task depth from path
+   */
+  protected getTaskDepth(path: string): number {
+    return this.taskDepths.get(path) ?? 0
+  }
+
+  /**
+   * Recursively collect task depths from verification tree
+   */
+  protected collectTaskDepths(
+    nodes: VerificationNode[],
+    parentPath: string,
+    depth: number,
+  ): void {
+    for (const node of nodes) {
+      const path = parentPath ? `${parentPath}:${node.key}` : node.key
+      this.taskDepths.set(path, depth)
+
+      if (node.children) {
+        this.collectTaskDepths(node.children, path, depth + 1)
+      }
+    }
+  }
+
+  /**
+   * Extract summary from task result
+   */
+  protected extractSummary(result: TaskResult): string {
+    // Use the parsed summary from summaryLine (strip the "key: " prefix if present)
+    // The parsers already format summaries nicely with file counts, test counts, etc.
+    if (result.summaryLine) {
+      const colonIndex = result.summaryLine.indexOf(": ")
+      if (colonIndex !== -1) {
+        return result.summaryLine.slice(colonIndex + 2)
+      }
+      return result.summaryLine
+    }
+
+    return result.ok ? "passed" : "failed"
+  }
+
+  /**
+   * Flatten nested task results into a single array
+   */
+  protected flattenResults(results: TaskResult[]): TaskResult[] {
+    const flat: TaskResult[] = []
+    for (const r of results) {
+      flat.push(r)
+      if (r.children) {
+        flat.push(...this.flattenResults(r.children))
+      }
+    }
+    return flat
+  }
+
+  /**
+   * Output task logs
+   */
+  outputLogs(results: TaskResult[], logsMode: "all" | "failed" | "none"): void {
+    if (logsMode === "none") return
+
+    const flatResults = this.flattenResults(results)
+
+    for (const r of flatResults) {
+      if (r.children) continue
+      if (logsMode === "failed" && r.ok) continue
+
+      const status = r.ok ? this.c(ansi.green, "OK") : this.c(ansi.red, "FAIL")
+
+      this.stream.write(
+        `\n${this.c(ansi.bold, "====")} ${this.c(ansi.bold, r.path.toUpperCase())} ${status} ${this.c(ansi.bold, "====")}\n`,
+      )
+      this.stream.write(r.output || "(no output)\n")
+    }
+  }
+
+  /**
+   * Output final summary
+   */
+  outputSummary(result: VerifyResult): void {
+    const finalMessage = result.ok
+      ? this.c(ansi.green, "\n== verification: All correct ==")
+      : this.c(ansi.red, "\n== verification: Failed ==")
+    this.stream.write(`${finalMessage}\n`)
+  }
+
+  // Abstract methods that subclasses must implement
+  abstract onStart(tasks: VerificationNode[]): void
+  abstract onTaskStart(path: string, key: string): void
+  abstract onTaskComplete(result: TaskResult): void
+  abstract onFinish(): void
+}
+
+/**
  * Task state for live dashboard
  */
 interface TaskState {
@@ -74,19 +216,16 @@ interface TaskState {
 /**
  * Live Dashboard Reporter - animated in-place updates for TTY
  */
-export class LiveDashboardReporter implements Reporter {
-  private colorEnabled: boolean
+export class LiveDashboardReporter extends BaseReporter {
   private showAll: boolean
-  private stream: NodeJS.WriteStream
   private tasks: Map<string, TaskState> = new Map()
   private taskOrder: string[] = []
   private spinner: SpinnerManager
   private lineCount = 0
 
   constructor(options: VerifyOptions = {}) {
-    this.colorEnabled = shouldUseColors(options)
+    super(options)
     this.showAll = options.showAll ?? false
-    this.stream = options.format === "json" ? process.stderr : process.stdout
     this.spinner = new SpinnerManager()
 
     // Handle Ctrl+C to restore cursor
@@ -97,22 +236,6 @@ export class LiveDashboardReporter implements Reporter {
     }
     process.on("SIGINT", cleanup)
     process.on("SIGTERM", cleanup)
-  }
-
-  private c(code: string, s: string): string {
-    return this.colorEnabled ? `${code}${s}${ansi.reset}` : s
-  }
-
-  private okMark(): string {
-    return this.colorEnabled ? this.c(ansi.green, "✓") : "OK"
-  }
-
-  private failMark(): string {
-    return this.colorEnabled ? this.c(ansi.red, "✗") : "FAIL"
-  }
-
-  private arrow(): string {
-    return this.colorEnabled ? this.c(ansi.cyan, "→") : "->"
   }
 
   /**
@@ -141,6 +264,8 @@ export class LiveDashboardReporter implements Reporter {
         status: "pending",
       })
       this.taskOrder.push(path)
+      // Also store in base class for consistency
+      this.taskDepths.set(path, depth)
 
       if (node.children) {
         this.collectTasks(node.children, path, depth + 1)
@@ -156,13 +281,6 @@ export class LiveDashboardReporter implements Reporter {
       return task.key
     }
     return `:${task.key}`
-  }
-
-  /**
-   * Get indentation for task depth
-   */
-  private getIndent(depth: number): string {
-    return "  ".repeat(depth)
   }
 
   /**
@@ -197,23 +315,6 @@ export class LiveDashboardReporter implements Reporter {
 
     // Pending - don't show
     return ""
-  }
-
-  /**
-   * Extract summary from task result
-   */
-  private extractSummary(result: TaskResult): string {
-    // Use the parsed summary from summaryLine (strip the "key: " prefix if present)
-    // The parsers already format summaries nicely with file counts, test counts, etc.
-    if (result.summaryLine) {
-      const colonIndex = result.summaryLine.indexOf(": ")
-      if (colonIndex !== -1) {
-        return result.summaryLine.slice(colonIndex + 2)
-      }
-      return result.summaryLine
-    }
-
-    return result.ok ? "passed" : "failed"
   }
 
   /**
@@ -270,146 +371,39 @@ export class LiveDashboardReporter implements Reporter {
     this.redraw() // Final redraw
     this.stream.write(cursor.show)
   }
-
-  outputLogs(results: TaskResult[], logsMode: "all" | "failed" | "none"): void {
-    if (logsMode === "none") return
-
-    const flatResults = this.flattenResults(results)
-
-    for (const r of flatResults) {
-      if (r.children) continue
-      if (logsMode === "failed" && r.ok) continue
-
-      const status = r.ok ? this.c(ansi.green, "OK") : this.c(ansi.red, "FAIL")
-
-      this.stream.write(
-        `\n${this.c(ansi.bold, "====")} ${this.c(ansi.bold, r.path.toUpperCase())} ${status} ${this.c(ansi.bold, "====")}\n`,
-      )
-      this.stream.write(r.output || "(no output)\n")
-    }
-  }
-
-  outputSummary(result: VerifyResult): void {
-    const finalMessage = result.ok
-      ? this.c(ansi.green, "\n== verification: All correct ==")
-      : this.c(ansi.red, "\n== verification: Failed ==")
-    this.stream.write(`${finalMessage}\n`)
-  }
-
-  private flattenResults(results: TaskResult[]): TaskResult[] {
-    const flat: TaskResult[] = []
-    for (const r of results) {
-      flat.push(r)
-      if (r.children) {
-        flat.push(...this.flattenResults(r.children))
-      }
-    }
-    return flat
-  }
 }
 
 /**
  * Sequential Reporter - line-by-line output for non-TTY
  */
-export class SequentialReporter implements Reporter {
-  private colorEnabled: boolean
-  private stream: NodeJS.WriteStream
-
-  constructor(options: VerifyOptions = {}) {
-    this.colorEnabled = shouldUseColors(options)
-    this.stream = options.format === "json" ? process.stderr : process.stdout
-  }
-
-  private c(code: string, s: string): string {
-    return this.colorEnabled ? `${code}${s}${ansi.reset}` : s
-  }
-
-  private okMark(): string {
-    return this.colorEnabled ? this.c(ansi.green, "✓") : "OK"
-  }
-
-  private failMark(): string {
-    return this.colorEnabled ? this.c(ansi.red, "✗") : "FAIL"
-  }
-
-  private arrow(): string {
-    return this.colorEnabled ? this.c(ansi.cyan, "→") : "->"
-  }
-
-  private write(line: string): void {
-    this.stream.write(line)
-  }
-
-  onStart(_tasks: VerificationNode[]): void {
-    // No initialization needed for sequential output
+export class SequentialReporter extends BaseReporter {
+  onStart(tasks: VerificationNode[]): void {
+    // Collect task depths from the config tree
+    this.collectTaskDepths(tasks, "", 0)
   }
 
   onTaskStart(path: string, _key: string): void {
-    this.write(`${this.arrow()} verifying ${this.c(ansi.bold, path)}\n`)
+    const depth = this.getTaskDepth(path)
+    const indent = this.getIndent(depth)
+    this.stream.write(
+      `${indent}${this.arrow()} verifying ${this.c(ansi.bold, path)}\n`,
+    )
   }
 
   onTaskComplete(result: TaskResult): void {
+    const depth = this.getTaskDepth(result.path)
+    const indent = this.getIndent(depth)
     const mark = result.ok ? this.okMark() : this.failMark()
     const verb = result.ok ? "verified" : "failed"
     const summary = this.extractSummary(result)
     const duration = this.c(ansi.dim, `${result.durationMs}ms`)
-    this.write(
-      `${mark} ${verb} ${this.c(ansi.bold, result.path)} ${this.c(ansi.dim, `(${summary}, ${duration})`)}\n`,
+    this.stream.write(
+      `${indent}${mark} ${verb} ${this.c(ansi.bold, result.path)} ${this.c(ansi.dim, `(${summary}, ${duration})`)}\n`,
     )
-  }
-
-  private extractSummary(result: TaskResult): string {
-    // Use the parsed summary from summaryLine (strip the "key: " prefix if present)
-    // The parsers already format summaries nicely with file counts, test counts, etc.
-    if (result.summaryLine) {
-      const colonIndex = result.summaryLine.indexOf(": ")
-      if (colonIndex !== -1) {
-        return result.summaryLine.slice(colonIndex + 2)
-      }
-      return result.summaryLine
-    }
-
-    return result.ok ? "passed" : "failed"
   }
 
   onFinish(): void {
     // No cleanup needed for sequential output
-  }
-
-  outputLogs(results: TaskResult[], logsMode: "all" | "failed" | "none"): void {
-    if (logsMode === "none") return
-
-    const flatResults = this.flattenResults(results)
-
-    for (const r of flatResults) {
-      if (r.children) continue
-      if (logsMode === "failed" && r.ok) continue
-
-      const status = r.ok ? this.c(ansi.green, "OK") : this.c(ansi.red, "FAIL")
-
-      this.write(
-        `\n${this.c(ansi.bold, "====")} ${this.c(ansi.bold, r.path.toUpperCase())} ${status} ${this.c(ansi.bold, "====")}\n`,
-      )
-      this.write(r.output || "(no output)\n")
-    }
-  }
-
-  outputSummary(result: VerifyResult): void {
-    const finalMessage = result.ok
-      ? this.c(ansi.green, "\n== verification: All correct ==")
-      : this.c(ansi.red, "\n== verification: Failed ==")
-    this.write(`${finalMessage}\n`)
-  }
-
-  private flattenResults(results: TaskResult[]): TaskResult[] {
-    const flat: TaskResult[] = []
-    for (const r of results) {
-      flat.push(r)
-      if (r.children) {
-        flat.push(...this.flattenResults(r.children))
-      }
-    }
-    return flat
   }
 }
 
@@ -476,17 +470,7 @@ export class JSONReporter implements Reporter {
 /**
  * Quiet Reporter - minimal output (summary only)
  */
-export class QuietReporter implements Reporter {
-  private colorEnabled: boolean
-
-  constructor(options: VerifyOptions = {}) {
-    this.colorEnabled = shouldUseColors(options)
-  }
-
-  private c(code: string, s: string): string {
-    return this.colorEnabled ? `${code}${s}${ansi.reset}` : s
-  }
-
+export class QuietReporter extends BaseReporter {
   onStart(_tasks: VerificationNode[]): void {
     // No output
   }
