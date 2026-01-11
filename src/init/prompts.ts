@@ -69,7 +69,9 @@ export async function promptForTasks(
     })
 
     if (selected.length === 0) {
-      console.log("\n⚠️  No tasks selected. A skeleton config will be created.\n")
+      console.log(
+        "\n⚠️  No tasks selected. A skeleton config will be created.\n",
+      )
     }
 
     return { tasks: selected, cancelled: false }

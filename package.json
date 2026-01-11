@@ -1,55 +1,57 @@
 {
-  "name": "@halecraft/verify",
-  "version": "0.1.0",
-  "description": "Hierarchical verification runner with parallel execution and terse output",
-  "type": "module",
-  "exports": {
-    ".": {
-      "import": "./dist/index.js",
-      "types": "./dist/index.d.ts"
-    }
-  },
-  "bin": {
-    "verify": "./bin/verify.mjs"
-  },
-  "files": [
-    "dist",
-    "bin"
-  ],
-  "scripts": {
-    "build": "tsup",
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "verify": "./bin/verify.mjs"
-  },
-  "keywords": [
-    "verify",
-    "test",
-    "lint",
-    "monorepo",
-    "parallel"
-  ],
-  "author": "",
-  "license": "MIT",
-  "dependencies": {
-    "@inquirer/prompts": "^7.0.0"
-  },
-  "devDependencies": {
-    "@biomejs/biome": "^2.3.11",
-    "@types/node": "^25.0.6",
-    "tsup": "^8.5.0",
-    "typescript": "~5.8.3",
-    "vitest": "^4.0.16"
-  },
-  "peerDependencies": {
-    "typescript": ">=5.0.0"
-  },
-  "peerDependenciesMeta": {
-    "typescript": {
-      "optional": true
-    }
-  },
-  "engines": {
-    "node": ">=18.0.0"
-  }
+	"name": "@halecraft/verify",
+	"version": "0.1.0",
+	"description": "Hierarchical verification runner with parallel execution and terse output",
+	"type": "module",
+	"exports": {
+		".": {
+			"import": "./dist/index.js",
+			"types": "./dist/index.d.ts"
+		}
+	},
+	"bin": {
+		"verify": "./bin/verify.mjs"
+	},
+	"files": [
+		"dist",
+		"bin"
+	],
+	"scripts": {
+		"build": "tsup",
+		"verify": "./bin/verify.mjs",
+		"verify:logic": "vitest run",
+		"verify:format": "biome check --write .",
+		"verify:types": "tsgo --noEmit"
+	},
+	"keywords": [
+		"verify",
+		"test",
+		"lint",
+		"monorepo",
+		"parallel"
+	],
+	"author": "",
+	"license": "MIT",
+	"dependencies": {
+		"@inquirer/prompts": "^7.0.0"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "^2.3.11",
+		"@types/node": "^25.0.6",
+		"tsup": "^8.5.0",
+		"typescript": "~5.8.3",
+		"@typescript/native-preview": "7.0.0-dev.20260103.1",
+		"vitest": "^4.0.16"
+	},
+	"peerDependencies": {
+		"typescript": ">=5.0.0"
+	},
+	"peerDependenciesMeta": {
+		"typescript": {
+			"optional": true
+		}
+	},
+	"engines": {
+		"node": ">=18.0.0"
+	}
 }

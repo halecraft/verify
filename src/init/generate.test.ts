@@ -39,7 +39,9 @@ describe("generate", () => {
   describe("generateConfigContent", () => {
     it("generates skeleton when no tasks provided", () => {
       const content = generateConfigContent([], "ts")
-      expect(content).toContain('import { defineConfig } from "@halecraft/verify"')
+      expect(content).toContain(
+        'import { defineConfig } from "@halecraft/verify"',
+      )
       expect(content).toContain("export default defineConfig({")
       expect(content).toContain("tasks: [")
       expect(content).toContain("// Add your verification tasks here")
@@ -56,7 +58,9 @@ describe("generate", () => {
         },
       ]
       const content = generateConfigContent(tasks, "ts")
-      expect(content).toContain('import { defineConfig } from "@halecraft/verify"')
+      expect(content).toContain(
+        'import { defineConfig } from "@halecraft/verify"',
+      )
       expect(content).toContain('{ key: "test", run: "pnpm test" }')
     })
 
@@ -95,7 +99,9 @@ describe("generate", () => {
 
       for (const format of ["ts", "mts", "js", "mjs"] as const) {
         const content = generateConfigContent(tasks, format)
-        expect(content).toContain('import { defineConfig } from "@halecraft/verify"')
+        expect(content).toContain(
+          'import { defineConfig } from "@halecraft/verify"',
+        )
       }
     })
 
