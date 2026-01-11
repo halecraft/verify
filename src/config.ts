@@ -105,7 +105,8 @@ export function mergeOptions(
     filter: cliOptions?.filter ?? configOptions?.filter,
     cwd: cliOptions?.cwd ?? configOptions?.cwd ?? process.cwd(),
     noColor: cliOptions?.noColor ?? configOptions?.noColor ?? false,
-    showAll: cliOptions?.showAll ?? configOptions?.showAll ?? false,
+    topLevelOnly:
+      cliOptions?.topLevelOnly ?? configOptions?.topLevelOnly ?? false,
     noTty: cliOptions?.noTty ?? configOptions?.noTty ?? false,
   } satisfies AllKeys<VerifyOptions>
 }

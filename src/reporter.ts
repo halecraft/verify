@@ -217,7 +217,7 @@ interface TaskState {
  * Live Dashboard Reporter - animated in-place updates for TTY
  */
 export class LiveDashboardReporter extends BaseReporter {
-  private showAll: boolean
+  private topLevelOnly: boolean
   private tasks: Map<string, TaskState> = new Map()
   private taskOrder: string[] = []
   private spinner: SpinnerManager
@@ -225,7 +225,7 @@ export class LiveDashboardReporter extends BaseReporter {
 
   constructor(options: VerifyOptions = {}) {
     super(options)
-    this.showAll = options.showAll ?? false
+    this.topLevelOnly = options.topLevelOnly ?? false
     this.spinner = new SpinnerManager()
 
     // Handle Ctrl+C to restore cursor
@@ -284,11 +284,11 @@ export class LiveDashboardReporter extends BaseReporter {
   }
 
   /**
-   * Check if task should be displayed based on showAll flag
+   * Check if task should be displayed based on topLevelOnly flag
    */
   private shouldDisplay(task: TaskState): boolean {
-    if (this.showAll) return true
-    return task.depth === 0
+    if (this.topLevelOnly) return task.depth === 0
+    return true
   }
 
   /**
@@ -377,12 +377,28 @@ export class LiveDashboardReporter extends BaseReporter {
  * Sequential Reporter - line-by-line output for non-TTY
  */
 export class SequentialReporter extends BaseReporter {
+  private topLevelOnly: boolean
+
+  constructor(options: VerifyOptions = {}) {
+    super(options)
+    this.topLevelOnly = options.topLevelOnly ?? false
+  }
+
   onStart(tasks: VerificationNode[]): void {
     // Collect task depths from the config tree
     this.collectTaskDepths(tasks, "", 0)
   }
 
+  /**
+   * Check if task should be displayed based on topLevelOnly flag
+   */
+  private shouldDisplay(path: string): boolean {
+    if (this.topLevelOnly) return this.getTaskDepth(path) === 0
+    return true
+  }
+
   onTaskStart(path: string, _key: string): void {
+    if (!this.shouldDisplay(path)) return
     const depth = this.getTaskDepth(path)
     const indent = this.getIndent(depth)
     this.stream.write(
@@ -391,6 +407,7 @@ export class SequentialReporter extends BaseReporter {
   }
 
   onTaskComplete(result: TaskResult): void {
+    if (!this.shouldDisplay(result.path)) return
     const depth = this.getTaskDepth(result.path)
     const indent = this.getIndent(depth)
     const mark = result.ok ? this.okMark() : this.failMark()

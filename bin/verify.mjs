@@ -17,7 +17,7 @@ function parseArgs(args) {
     init: false,
     force: false,
     yes: false,
-    all: false,
+    topLevelOnly: false,
     noTty: false,
   }
 
@@ -38,8 +38,8 @@ function parseArgs(args) {
       options.force = true
     } else if (arg === "--yes" || arg === "-y") {
       options.yes = true
-    } else if (arg === "--all" || arg === "-a") {
-      options.all = true
+    } else if (arg === "--top-level" || arg === "-t") {
+      options.topLevelOnly = true
     } else if (arg === "--no-tty") {
       options.noTty = true
     } else if (arg.startsWith("--logs=")) {
@@ -77,7 +77,7 @@ Options:
   --json              Output results as JSON
   --verbose, -v       Show all task output
   --quiet, -q         Show only final result
-  --all, -a           Show all nested tasks (default: top-level only)
+  --top-level, -t     Show only top-level tasks (hide descendants)
   --no-tty            Force sequential output (disable live dashboard)
   --logs=MODE         Log verbosity: all, failed, none (default: failed)
   --config, -c PATH   Path to config file (or output path for --init)
@@ -91,7 +91,7 @@ Examples:
   verify                    Run all verifications
   verify logic              Run only 'logic' tasks
   verify logic:ts           Run only 'logic:ts' task
-  verify --all              Show all nested tasks with indentation
+  verify --top-level        Show only top-level tasks
   verify --json             Output JSON for CI
   verify --logs=all         Show all output
   verify --init             Create config interactively
@@ -156,7 +156,7 @@ async function main() {
       (options.verbose ? "all" : options.quiet ? "none" : "failed"),
     filter: options.filter.length > 0 ? options.filter : undefined,
     cwd: options.config,
-    showAll: options.all,
+    topLevelOnly: options.topLevelOnly,
     noTty: options.noTty,
   }
 
