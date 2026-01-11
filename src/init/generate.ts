@@ -27,7 +27,11 @@ function generateImport(format: OutputFormat): string {
  * Generate a task object as a string
  */
 function generateTask(task: DetectedTask, indent: string): string {
-  return `${indent}{ key: "${task.key}", run: "${task.command}" }`
+  const parts = [`key: "${task.key}"`, `run: "${task.command}"`]
+  if (task.parser) {
+    parts.push(`parser: "${task.parser}"`)
+  }
+  return `${indent}{ ${parts.join(", ")} }`
 }
 
 /**

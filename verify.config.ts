@@ -21,6 +21,6 @@ export default defineConfig({
       ],
     },
     // build still uses pnpm because it runs the package.json script
-    { key: "build", run: "pnpm build" },
+    { key: "build", run: "./node_modules/.bin/tsup" },
   ],
 })

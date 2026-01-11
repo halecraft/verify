@@ -11,16 +11,126 @@ export interface DetectedTask {
   name: string
   /** The npm script name that was detected */
   scriptName: string
-  /** The command to run */
+  /** The command to run (optimized direct path when possible) */
   command: string
   /** Category for grouping (format, types, logic, build) */
   category: "format" | "types" | "logic" | "build" | "other"
+  /** Parser to use for this task */
+  parser?: string
 }
 
 /**
- * Patterns to detect verification-related scripts
+ * Tool detection patterns - maps script content to optimized commands
  */
-const DETECTION_PATTERNS: Array<{
+interface ToolPattern {
+  /** Regex to match in script content */
+  pattern: RegExp
+  /** Binary name in node_modules/.bin */
+  binary: string
+  /** Arguments to append (extracted from script or default) */
+  getArgs: (match: RegExpMatchArray, scriptContent: string) => string
+  /** Parser to use */
+  parser?: string
+}
+
+const TOOL_PATTERNS: ToolPattern[] = [
+  // Biome
+  {
+    pattern: /\bbiome\s+(check|lint|format)/,
+    binary: "biome",
+    getArgs: (match, content) => {
+      // Extract the full biome command with args
+      const biomeMatch = content.match(/biome\s+([^&|;]+)/)
+      return biomeMatch ? biomeMatch[1].trim() : "check ."
+    },
+    parser: "biome",
+  },
+  // ESLint
+  {
+    pattern: /\beslint\b/,
+    binary: "eslint",
+    getArgs: (_, content) => {
+      const eslintMatch = content.match(/eslint\s+([^&|;]+)/)
+      return eslintMatch ? eslintMatch[1].trim() : "."
+    },
+  },
+  // Prettier
+  {
+    pattern: /\bprettier\b/,
+    binary: "prettier",
+    getArgs: (_, content) => {
+      const prettierMatch = content.match(/prettier\s+([^&|;]+)/)
+      return prettierMatch ? prettierMatch[1].trim() : "--check ."
+    },
+  },
+  // TypeScript
+  {
+    pattern: /\btsc\b/,
+    binary: "tsc",
+    getArgs: (_, content) => {
+      const tscMatch = content.match(/tsc\s+([^&|;]+)/)
+      return tscMatch ? tscMatch[1].trim() : "--noEmit"
+    },
+    parser: "tsc",
+  },
+  // tsgo
+  {
+    pattern: /\btsgo\b/,
+    binary: "tsgo",
+    getArgs: (_, content) => {
+      const tsgoMatch = content.match(/tsgo\s+([^&|;]+)/)
+      return tsgoMatch ? tsgoMatch[1].trim() : "--noEmit"
+    },
+    parser: "tsc",
+  },
+  // Vitest
+  {
+    pattern: /\bvitest\b/,
+    binary: "vitest",
+    getArgs: (_, content) => {
+      // Check if it's watch mode or run mode
+      if (content.includes("vitest run")) return "run"
+      if (content.includes("vitest watch")) return "run" // Convert watch to run for verify
+      return "run"
+    },
+    parser: "vitest",
+  },
+  // Jest
+  {
+    pattern: /\bjest\b/,
+    binary: "jest",
+    getArgs: () => "",
+  },
+  // Mocha
+  {
+    pattern: /\bmocha\b/,
+    binary: "mocha",
+    getArgs: () => "",
+  },
+  // tsup
+  {
+    pattern: /\btsup\b/,
+    binary: "tsup",
+    getArgs: (_, content) => {
+      const tsupMatch = content.match(/tsup\s+([^&|;]+)/)
+      return tsupMatch ? tsupMatch[1].trim() : ""
+    },
+  },
+  // esbuild
+  {
+    pattern: /\besbuild\b/,
+    binary: "esbuild",
+    getArgs: (_, content) => {
+      const esbuildMatch = content.match(/esbuild\s+([^&|;]+)/)
+      return esbuildMatch ? esbuildMatch[1].trim() : ""
+    },
+  },
+]
+
+/**
+ * Patterns to detect verification-related scripts by name
+ */
+const SCRIPT_NAME_PATTERNS: Array<{
   pattern: RegExp
   key: string
   name: string
@@ -110,6 +220,33 @@ function readPackageJson(
 }
 
 /**
+ * Check if a binary exists in node_modules/.bin
+ */
+function binaryExists(cwd: string, binary: string): boolean {
+  return existsSync(join(cwd, "node_modules", ".bin", binary))
+}
+
+/**
+ * Try to extract an optimized direct command from script content
+ */
+function extractOptimizedCommand(
+  cwd: string,
+  scriptContent: string,
+): { command: string; parser?: string } | null {
+  for (const tool of TOOL_PATTERNS) {
+    const match = scriptContent.match(tool.pattern)
+    if (match && binaryExists(cwd, tool.binary)) {
+      const args = tool.getArgs(match, scriptContent)
+      const command = args
+        ? `./node_modules/.bin/${tool.binary} ${args}`
+        : `./node_modules/.bin/${tool.binary}`
+      return { command, parser: tool.parser }
+    }
+  }
+  return null
+}
+
+/**
  * Detect verification tasks from package.json scripts
  */
 export function detectFromPackageJson(cwd: string): DetectedTask[] {
@@ -122,29 +259,34 @@ export function detectFromPackageJson(cwd: string): DetectedTask[] {
   const detected: DetectedTask[] = []
   const seenKeys = new Set<string>()
 
-  for (const [scriptName, scriptCommand] of Object.entries(pkg.scripts)) {
+  for (const [scriptName, scriptContent] of Object.entries(pkg.scripts)) {
     // Skip scripts that are just running other scripts (like "verify": "run-s ...")
     if (
-      scriptCommand.includes("run-s") ||
-      scriptCommand.includes("run-p") ||
-      scriptCommand.includes("npm-run-all")
+      scriptContent.includes("run-s") ||
+      scriptContent.includes("run-p") ||
+      scriptContent.includes("npm-run-all")
     ) {
       continue
     }
 
     // Check against detection patterns
-    for (const { pattern, key, name, category } of DETECTION_PATTERNS) {
+    for (const { pattern, key, name, category } of SCRIPT_NAME_PATTERNS) {
       if (pattern.test(scriptName)) {
         // Avoid duplicates for the same key
         const uniqueKey = seenKeys.has(key) ? `${key}-${scriptName}` : key
         if (!seenKeys.has(uniqueKey)) {
           seenKeys.add(uniqueKey)
+
+          // Try to extract optimized command
+          const optimized = extractOptimizedCommand(cwd, scriptContent)
+
           detected.push({
             key: uniqueKey,
             name,
             scriptName,
-            command: `npm run ${scriptName}`,
+            command: optimized?.command ?? `npm run ${scriptName}`,
             category,
+            parser: optimized?.parser,
           })
         }
         break
@@ -198,14 +340,22 @@ export function getRunCommand(
 
 /**
  * Detect tasks with proper package manager commands
+ * Uses optimized direct paths when possible, falls back to package manager
  */
 export function detectTasks(cwd: string): DetectedTask[] {
   const packageManager = detectPackageManager(cwd)
   const tasks = detectFromPackageJson(cwd)
 
-  // Update commands to use the detected package manager
-  return tasks.map(task => ({
-    ...task,
-    command: getRunCommand(packageManager, task.scriptName),
-  }))
+  // For tasks without optimized commands, use package manager
+  return tasks.map(task => {
+    // If command is already optimized (starts with ./), keep it
+    if (task.command.startsWith("./")) {
+      return task
+    }
+    // Otherwise use package manager command
+    return {
+      ...task,
+      command: getRunCommand(packageManager, task.scriptName),
+    }
+  })
 }
