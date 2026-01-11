@@ -40,8 +40,10 @@ export {
 export {
   createReporter,
   JSONReporter,
+  LiveDashboardReporter,
   QuietReporter,
   type Reporter,
+  SequentialReporter,
   TTYReporter,
 } from "./reporter.js"
 // Runner
@@ -75,12 +77,18 @@ export async function verify(
   const options = mergeOptions(config.options, cliOptions)
   const reporter = createReporter(options)
 
+  // Initialize reporter with task list (for live dashboard)
+  reporter.onStart?.(config.tasks)
+
   const runner = new VerificationRunner(options, undefined, {
     onTaskStart: (path, key) => reporter.onTaskStart(path, key),
     onTaskComplete: result => reporter.onTaskComplete(result),
   })
 
   const result = await runner.run(config.tasks)
+
+  // Cleanup reporter (stop spinner, restore cursor)
+  reporter.onFinish?.()
 
   reporter.outputLogs(result.tasks, options.logs ?? "failed")
   reporter.outputSummary(result)

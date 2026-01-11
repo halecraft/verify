@@ -17,6 +17,7 @@ function parseArgs(args) {
     init: false,
     force: false,
     yes: false,
+    all: false,
   }
 
   for (let i = 0; i < args.length; i++) {
@@ -36,6 +37,8 @@ function parseArgs(args) {
       options.force = true
     } else if (arg === "--yes" || arg === "-y") {
       options.yes = true
+    } else if (arg === "--all" || arg === "-a") {
+      options.all = true
     } else if (arg.startsWith("--logs=")) {
       options.logs = arg.slice(7)
     } else if (arg === "--logs") {
@@ -71,6 +74,7 @@ Options:
   --json              Output results as JSON
   --verbose, -v       Show all task output
   --quiet, -q         Show only final result
+  --all, -a           Show all nested tasks (default: top-level only)
   --logs=MODE         Log verbosity: all, failed, none (default: failed)
   --config, -c PATH   Path to config file (or output path for --init)
   --filter, -f PATH   Filter to specific task paths
@@ -83,6 +87,7 @@ Examples:
   verify                    Run all verifications
   verify logic              Run only 'logic' tasks
   verify logic:ts           Run only 'logic:ts' task
+  verify --all              Show all nested tasks with indentation
   verify --json             Output JSON for CI
   verify --logs=all         Show all output
   verify --init             Create config interactively
@@ -147,6 +152,7 @@ async function main() {
       (options.verbose ? "all" : options.quiet ? "none" : "failed"),
     filter: options.filter.length > 0 ? options.filter : undefined,
     cwd: options.config,
+    showAll: options.all,
   }
 
   try {

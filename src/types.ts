@@ -80,6 +80,8 @@ export interface VerifyOptions {
   cwd?: string
   /** Disable colors */
   noColor?: boolean
+  /** Show all nested tasks (default: only top-level) */
+  showAll?: boolean
 }
 
 /**
